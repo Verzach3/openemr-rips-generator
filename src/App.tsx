@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, Route, Switch } from "wouter";
 import { orpc } from "./lib/orpc";
 import { SyncPage } from "./SyncPage";
+import { ExplorerPage } from "./ExplorerPage";
 import "./index.css";
 
 const Home = () => (
@@ -148,6 +149,9 @@ export function App() {
                 <Link href="/sync" className={(active) => active ? "active-nav-link" : "nav-link"}>
                   Sync
                 </Link>
+                <Link href="/explorer" className={(active) => active ? "active-nav-link" : "nav-link"}>
+                  Explorer
+                </Link>
                 <Link href="/api" className={(active) => active ? "active-nav-link" : "nav-link"}>
                   API
                 </Link>
@@ -164,6 +168,7 @@ export function App() {
         <Switch>
           <Route path="/" component={Home} />
           <Route path="/sync" component={SyncPage} />
+          <Route path="/explorer" component={ExplorerPage} />
           <Route path="/api" component={ApiPage} />
           <Route path="/about" component={About} />
           <Route>

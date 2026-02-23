@@ -2,6 +2,7 @@ import { os } from "@orpc/server";
 import { z } from "zod";
 import { eventIterator } from "@orpc/server";
 import { getSyncStatus, syncAllTables, type SyncEvent } from "./sync";
+import { queryReferenceRecords, getDistinctTableNames } from "./explorer";
 
 const greet = os
     .input(z.object({ name: z.string() }))
@@ -44,7 +45,36 @@ const syncAll = os
         }
     });
 
+// Explorer procedures
+const explorerGetTableNames = os.handler(async () => {
+    return await getDistinctTableNames();
+});
+
+const explorerQuery = os
+    .input(
+        z.object({
+            pageIndex: z.number().int().min(0),
+            pageSize: z.number().int().min(1).max(100),
+            sorting: z.array(
+                z.object({
+                    id: z.string(),
+                    desc: z.boolean(),
+                })
+            ),
+            filters: z.array(
+                z.object({
+                    id: z.string(),
+                    value: z.union([z.string(), z.tuple([z.number(), z.number()])]),
+                })
+            ),
+        })
+    )
+    .handler(async ({ input }) => {
+        return await queryReferenceRecords(input);
+    });
+
 export const router = {
     hello: { greet, ping },
     sync: { getStatus, syncAll },
+    explorer: { getTableNames: explorerGetTableNames, query: explorerQuery },
 };
