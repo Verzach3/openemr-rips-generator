@@ -3,6 +3,9 @@ import { z } from "zod";
 import { eventIterator } from "@orpc/server";
 import { getSyncStatus, syncAllTables, type SyncEvent } from "./sync";
 import { queryReferenceRecords, getDistinctTableNames } from "./explorer";
+import { prisma } from "./db";
+import { getOpenEmrTableNames, getOpenEmrTableColumns } from "./openemr/schema";
+import { generateRipsJson } from "./rips-generator";
 
 const greet = os
     .input(z.object({ name: z.string() }))
@@ -73,8 +76,83 @@ const explorerQuery = os
         return await queryReferenceRecords(input);
     });
 
+// RIPS procedures
+const ripsGetPresets = os.handler(async () => {
+    return await prisma.ripsPreset.findMany({
+        orderBy: { name: "asc" },
+    });
+});
+
+const ripsSavePreset = os
+    .input(z.object({
+        id: z.number().optional(),
+        name: z.string().min(1),
+        description: z.string().optional().nullable(),
+        mapping: z.string(), // JSON
+    }))
+    .handler(async ({ input }) => {
+        if (input.id) {
+            return await prisma.ripsPreset.update({
+                where: { id: input.id },
+                data: {
+                    name: input.name,
+                    description: input.description,
+                    mapping: input.mapping,
+                },
+            });
+        } else {
+            return await prisma.ripsPreset.create({
+                data: {
+                    name: input.name,
+                    description: input.description,
+                    mapping: input.mapping,
+                },
+            });
+        }
+    });
+
+const ripsDeletePreset = os
+    .input(z.object({ id: z.number() }))
+    .handler(async ({ input }) => {
+        await prisma.ripsPreset.delete({ where: { id: input.id } });
+        return { success: true };
+    });
+
+const ripsGetOpenEmrTables = os.handler(async () => {
+    return await getOpenEmrTableNames();
+});
+
+const ripsGetOpenEmrColumns = os
+    .input(z.object({ tableName: z.string() }))
+    .handler(async ({ input }) => {
+        return await getOpenEmrTableColumns(input.tableName);
+    });
+
+const ripsGenerate = os
+    .input(z.object({
+        presetId: z.number(),
+        dateStart: z.string(),
+        dateEnd: z.string(),
+    }))
+    .handler(async ({ input }) => {
+        try {
+            const json = await generateRipsJson(input.presetId, input.dateStart, input.dateEnd);
+            return { success: true, json };
+        } catch (e) {
+            return { success: false, error: String(e) };
+        }
+    });
+
 export const router = {
     hello: { greet, ping },
     sync: { getStatus, syncAll },
     explorer: { getTableNames: explorerGetTableNames, query: explorerQuery },
+    rips: {
+        getPresets: ripsGetPresets,
+        savePreset: ripsSavePreset,
+        deletePreset: ripsDeletePreset,
+        getOpenEmrTables: ripsGetOpenEmrTables,
+        getOpenEmrColumns: ripsGetOpenEmrColumns,
+        generate: ripsGenerate,
+    },
 };
