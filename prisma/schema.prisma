@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// Tracks each SISPRO reference table and its sync status
+model SyncTable {
+  id                 Int       @id @default(autoincrement())
+  nombre             String    @unique
+  dbNombreTabla      String
+  urlTablaSISPRO     String
+  fechaActualizacion String // Remote last-update date from SISPRO
+  lastSyncedAt       DateTime? // When we last pulled data locally
+  recordCount        Int       @default(0)
+  estadoEntidad      Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+/// Generic reference record — all SISPRO tables share the same schema
+model ReferenceRecord {
+  id                 Int      @id @default(autoincrement())
+  tableName          String // Discriminator: which SISPRO table this belongs to
+  externalId         Int // "ID" from the SISPRO API
+  codigo             String
+  nombre             String
+  descripcion        String?
+  habilitado         Boolean  @default(true)
+  creationDateTime   String?
+  lastUpdateDateTime String?
+  extraI             String?
+  extraII            String?
+  extraIII           String?
+  extraIV            String?
+  extraV             String?
+  extraVI            String?
+  extraVII           String?
+  extraVIII          String?
+  extraIX            String?
+  extraX             String?
+  valor              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([tableName, externalId])
+  @@index([tableName])
+  @@index([codigo])
+}

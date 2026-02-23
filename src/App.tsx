@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, Route, Switch } from "wouter";
 import { orpc } from "./lib/orpc";
+import { SyncPage } from "./SyncPage";
 import "./index.css";
 
 const Home = () => (
@@ -144,6 +145,9 @@ export function App() {
                 <Link href="/" className={(active) => active ? "active-nav-link" : "nav-link"}>
                   Dashboard
                 </Link>
+                <Link href="/sync" className={(active) => active ? "active-nav-link" : "nav-link"}>
+                  Sync
+                </Link>
                 <Link href="/api" className={(active) => active ? "active-nav-link" : "nav-link"}>
                   API
                 </Link>
@@ -159,6 +163,7 @@ export function App() {
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
         <Switch>
           <Route path="/" component={Home} />
+          <Route path="/sync" component={SyncPage} />
           <Route path="/api" component={ApiPage} />
           <Route path="/about" component={About} />
           <Route>
