@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { orpc } from "./lib/orpc";
+import { AsyncSelect } from "./components/AsyncSelect";
 
 const RIPS_SCHEMA = {
   label: "RIPS",
@@ -132,6 +133,8 @@ export function RipsPage() {
     // Editor Form State (derived from selection)
     const [editConfig, setEditConfig] = useState<any>({});
     const [sourceColumns, setSourceColumns] = useState<any[]>([]); // For the mapping editor dropdown
+    const [localTables, setLocalTables] = useState<string[]>([]);
+    const [localColumns, setLocalColumns] = useState<any[]>([]);
 
     // Generation State
     const [dateStart, setDateStart] = useState("");
@@ -144,6 +147,7 @@ export function RipsPage() {
         loadPresets();
         loadTables();
         loadReferenceTables();
+        loadLocalTables();
     }, []);
 
     // Load edit config when selection changes
@@ -158,10 +162,12 @@ export function RipsPage() {
 
     // Fetch columns if the edit config has a table selected
     useEffect(() => {
-        if (editConfig.table) {
+        if (editConfig.type === 'field' && editConfig.table) {
             fetchSourceColumns(editConfig.table);
+        } else if ((editConfig.type === 'local_field' || editConfig.type === 'static_lookup') && editConfig.table) {
+            fetchLocalColumns(editConfig.table);
         }
-    }, [editConfig.table]);
+    }, [editConfig.table, editConfig.type]);
 
     const loadPresets = async () => {
         try {
@@ -184,10 +190,24 @@ export function RipsPage() {
         } catch (e) { console.error(e); }
     };
 
+    const loadLocalTables = async () => {
+        try {
+            const data = await orpc.rips.getLocalTables();
+            setLocalTables(data);
+        } catch (e) { console.error(e); }
+    };
+
     const fetchSourceColumns = async (tableName: string) => {
         try {
             const cols = await orpc.rips.getOpenEmrColumns({ tableName });
             setSourceColumns(cols);
+        } catch (e) { console.error(e); }
+    };
+
+    const fetchLocalColumns = async (tableName: string) => {
+        try {
+            const cols = await orpc.rips.getLocalColumns({ tableName });
+            setLocalColumns(cols);
         } catch (e) { console.error(e); }
     };
 
@@ -450,7 +470,9 @@ export function RipsPage() {
                                             onChange={(e) => setEditConfig({ ...editConfig, type: e.target.value })}
                                         >
                                             <option value="static">Static Value</option>
+                                            <option value="static_lookup">Static Lookup (Local DB)</option>
                                             <option value="field">OpenEMR Field</option>
+                                            <option value="local_field">Local DB Field</option>
                                             <option value="lookup">Reference Lookup</option>
                                             {selectedNodeDef.type === 'array' && <option value="list">List Source</option>}
                                         </select>
@@ -470,7 +492,7 @@ export function RipsPage() {
 
                                     {(editConfig.type === 'field' || editConfig.type === 'list' || editConfig.type === 'lookup') && (
                                         <div className="mb-4">
-                                            <label className="block text-sm font-semibold mb-1">Source Table</label>
+                                            <label className="block text-sm font-semibold mb-1">Source Table (OpenEMR)</label>
                                             <select
                                                 className="w-full border border-gray-300 rounded p-2 text-sm"
                                                 value={editConfig.table || ''}
@@ -478,6 +500,20 @@ export function RipsPage() {
                                             >
                                                 <option value="">-- Select Table --</option>
                                                 {tables.map(t => <option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    {(editConfig.type === 'local_field' || editConfig.type === 'static_lookup') && (
+                                        <div className="mb-4">
+                                            <label className="block text-sm font-semibold mb-1">Source Table (Local DB)</label>
+                                            <select
+                                                className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                value={editConfig.table || ''}
+                                                onChange={(e) => setEditConfig({ ...editConfig, table: e.target.value })}
+                                            >
+                                                <option value="">-- Select Table --</option>
+                                                {localTables.map(t => <option key={t} value={t}>{t}</option>)}
                                             </select>
                                         </div>
                                     )}
@@ -494,6 +530,47 @@ export function RipsPage() {
                                                 {sourceColumns.map(c => <option key={c.Field} value={c.Field}>{c.Field} ({c.Type})</option>)}
                                             </select>
                                         </div>
+                                    )}
+
+                                    {editConfig.type === 'local_field' && editConfig.table && (
+                                        <div className="mb-4">
+                                            <label className="block text-sm font-semibold mb-1">Source Column</label>
+                                            <select
+                                                className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                value={editConfig.column || ''}
+                                                onChange={(e) => setEditConfig({ ...editConfig, column: e.target.value })}
+                                            >
+                                                <option value="">-- Select Column --</option>
+                                                {localColumns.map(c => <option key={c.Field} value={c.Field}>{c.Field} ({c.Type})</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    {editConfig.type === 'static_lookup' && editConfig.table && (
+                                        <>
+                                            <div className="mb-4">
+                                                <label className="block text-sm font-semibold mb-1">Value Column</label>
+                                                <select
+                                                    className="w-full border border-gray-300 rounded p-2 text-sm"
+                                                    value={editConfig.column || ''}
+                                                    onChange={(e) => setEditConfig({ ...editConfig, column: e.target.value })}
+                                                >
+                                                    <option value="">-- Select Column --</option>
+                                                    {localColumns.map(c => <option key={c.Field} value={c.Field}>{c.Field} ({c.Type})</option>)}
+                                                </select>
+                                            </div>
+                                            {editConfig.column && (
+                                                <div className="mb-4">
+                                                    <label className="block text-sm font-semibold mb-1">Select Value</label>
+                                                    <AsyncSelect
+                                                        tableName={editConfig.table}
+                                                        columnName={editConfig.column}
+                                                        value={editConfig.value || ''}
+                                                        onChange={(val) => setEditConfig({ ...editConfig, value: val })}
+                                                    />
+                                                </div>
+                                            )}
+                                        </>
                                     )}
 
                                     {editConfig.type === 'lookup' && editConfig.table && (

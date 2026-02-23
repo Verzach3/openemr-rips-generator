@@ -6,6 +6,7 @@ import { queryReferenceRecords, getDistinctTableNames } from "./explorer";
 import { prisma } from "./db";
 import { getOpenEmrTableNames, getOpenEmrTableColumns } from "./openemr/schema";
 import { generateRipsJson } from "./rips-generator";
+import { getLocalTableNames, getLocalTableColumns, getDistinctValues } from "./local-schema";
 
 const greet = os
     .input(z.object({ name: z.string() }))
@@ -128,6 +129,27 @@ const ripsGetOpenEmrColumns = os
         return await getOpenEmrTableColumns(input.tableName);
     });
 
+const ripsGetLocalTables = os.handler(async () => {
+    return await getLocalTableNames();
+});
+
+const ripsGetLocalColumns = os
+    .input(z.object({ tableName: z.string() }))
+    .handler(async ({ input }) => {
+        return await getLocalTableColumns(input.tableName);
+    });
+
+const ripsGetDistinctValues = os
+    .input(z.object({
+        tableName: z.string(),
+        columnName: z.string(),
+        search: z.string().optional(),
+        limit: z.number().min(1).max(100).optional(),
+    }))
+    .handler(async ({ input }) => {
+        return await getDistinctValues(input.tableName, input.columnName, input.search || "", input.limit || 20);
+    });
+
 const ripsGenerate = os
     .input(z.object({
         presetId: z.number(),
@@ -153,6 +175,9 @@ export const router = {
         deletePreset: ripsDeletePreset,
         getOpenEmrTables: ripsGetOpenEmrTables,
         getOpenEmrColumns: ripsGetOpenEmrColumns,
+        getLocalTables: ripsGetLocalTables,
+        getLocalColumns: ripsGetLocalColumns,
+        getDistinctValues: ripsGetDistinctValues,
         generate: ripsGenerate,
     },
 };

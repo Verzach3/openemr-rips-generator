@@ -107,6 +107,7 @@ async function processNode(node: any, path: string, mapping: any, context: any, 
 
     if (node.type === 'array') {
         const config = mapping[path];
+        // TODO: Handle 'local_list' if we ever support iterating over local tables
         if (!config || config.type !== 'list' || !config.table) {
              console.warn(`No list mapping found for array at ${path}`);
              return [];
@@ -181,16 +182,44 @@ async function processNode(node: any, path: string, mapping: any, context: any, 
     const config = mapping[path];
     if (!config) return null;
 
-    if (config.type === 'static') return config.value;
+    // Static values work for both 'static' and 'static_lookup' since the UI saves the value directly
+    if (config.type === 'static' || config.type === 'static_lookup') return config.value;
 
     if (config.type === 'field') {
-         // If config.table matches context table (or we just look in context vars), use it.
-         // Context merges row data, so column name should be property.
-         // We ignore config.table verification for now and just look for property.
+         // OpenEMR field from context
          if (context[config.column] !== undefined) {
              return context[config.column];
          }
          return null;
+    }
+
+    if (config.type === 'local_field') {
+        // Query local DB for single value if context allows, or if it's meant to be static-ish?
+        // Usually local_field implies we are iterating over a local table, but we currently only iterate OpenEMR tables.
+        // If we are inside an OpenEMR loop, 'local_field' implies joining/looking up in a local table?
+        // Or is it just fetching a single value from a local table (like settings)?
+
+        // For now, let's assume it behaves like a static lookup if we can't join,
+        // BUT if it's a known join (e.g. ReferenceRecord), maybe we can do something?
+        // Given the requirement "values that only are in the local db", it might be a lookup based on some context key?
+
+        // Actually, without a defined join key in the mapping, we can't automatically link OpenEMR row -> Local DB row.
+        // Unless the Local DB row IS the context (which isn't supported yet as we only iterate OpenEMR tables).
+
+        // If the user selects a "Local DB Field", and we are in an OpenEMR context, we probably can't resolve it
+        // unless we have a specific logic or it's a global setting table.
+
+        // However, if the user mistakenly uses 'local_field' for what should be a 'lookup', we might want to warn.
+        // But if they want to just pick a value from a table row... that's 'static_lookup'.
+
+        // Let's implement a basic "First Record" fallback or log warning if context doesn't match.
+        // OR, if the table is 'SyncTable' or 'ReferenceRecord', maybe we return null for now
+        // unless we add "Local Table Join" logic later.
+
+        // NOTE: For this task, 'static_lookup' covers the "select the exact value I want" case.
+        // 'local_field' might be reserved for future "Local List" iteration.
+
+        return null;
     }
 
     if (config.type === 'lookup') {
@@ -199,15 +228,10 @@ async function processNode(node: any, path: string, mapping: any, context: any, 
 
         try {
             // Prisma query for lookup
-            // We need to dynamically build the where clause
-            // refTable is 'ReferenceRecord' but we filter by 'tableName'
             const whereClause: any = {
                 tableName: config.refTable,
             };
 
-            // Match column logic
-            // The ReferenceRecord table has fields: codigo, nombre, extraI...extraX, valor
-            // user config.matchColumn should be one of these.
             whereClause[config.matchColumn] = String(sourceVal);
 
             const ref = await prisma.referenceRecord.findFirst({
