@@ -41,3 +41,61 @@ export async function getNextRipsConsecutive() {
     });
     return (lastGen?.id ?? 0) + 1;
 }
+
+/**
+ * Ensure default RIPS Incapacidad options exist in the database.
+ * This is a self-healing step to make sure the options are configurable.
+ */
+export async function ensureRipsIncapacidadOptions() {
+    const TABLE_NAME = "RIPSIncapacidad";
+
+    // Check if any exist
+    const count = await prisma.referenceRecord.count({
+        where: { tableName: TABLE_NAME }
+    });
+
+    if (count === 0) {
+        console.log("Seeding RIPS Incapacidad options...");
+        // Insert defaults safely using transaction
+        // extraI: '1' for true, '0' for false
+        await prisma.$transaction([
+            prisma.referenceRecord.create({
+                data: {
+                    tableName: TABLE_NAME,
+                    codigo: "SI",
+                    nombre: "Si",
+                    extraI: "1",
+                    habilitado: true,
+                    externalId: 1
+                }
+            }),
+            prisma.referenceRecord.create({
+                data: {
+                    tableName: TABLE_NAME,
+                    codigo: "NO",
+                    nombre: "No",
+                    extraI: "0",
+                    habilitado: true,
+                    externalId: 2
+                }
+            })
+        ]);
+    }
+}
+
+/**
+ * Fetch available Incapacidad options for RIPS
+ */
+export async function getRipIncapacidades() {
+    return await prisma.referenceRecord.findMany({
+        where: {
+            tableName: "RIPSIncapacidad",
+            habilitado: true,
+        },
+        select: {
+            codigo: true,
+            nombre: true,
+            extraI: true // Needed to map logic
+        }
+    });
+}

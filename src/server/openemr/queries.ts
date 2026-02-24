@@ -143,3 +143,16 @@ export async function getPatientsRipsData(patientIds: number[]) {
         .where("pid", "in", patientIds)
         .execute();
 }
+
+/**
+ * Fetch billing options (including inability to work status) for specific encounters
+ */
+export async function getBillingOptionsByEncounterIds(encounterIds: number[]) {
+    if (encounterIds.length === 0) return [];
+
+    return await openemrDb
+        .selectFrom("form_misc_billing_options")
+        .select(["encounter", "is_unable_to_work"])
+        .where("encounter", "in", encounterIds)
+        .execute();
+}

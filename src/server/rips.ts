@@ -1,7 +1,7 @@
 import { os } from "@orpc/server";
 import { z } from "zod";
-import { searchPatients, getEncountersForPatients, getPatientsRipsData, getFacilityById, getFacilities } from "./openemr/queries";
-import { getRipUserTypes, createRipsGenerationRecord } from "./rips-helper";
+import { searchPatients, getEncountersForPatients, getPatientsRipsData, getFacilityById, getFacilities, getBillingOptionsByEncounterIds } from "./openemr/queries";
+import { getRipUserTypes, createRipsGenerationRecord, ensureRipsIncapacidadOptions, getRipIncapacidades } from "./rips-helper";
 
 const searchPatientsProcedure = os
     .input(z.object({ term: z.string().min(1) }))
@@ -63,14 +63,41 @@ const generateProcedure = os
             const allEncounters = await getEncountersForPatients(patientIds);
             const encounterMap = new Map(allEncounters.map((e) => [e.id, e]));
 
-            // 4. Create Generation Record to get Consecutive ID
+            // 4. Fetch Billing Options for selected encounters (for Incapacidad logic)
+            // Ensure options exist and fetch them
+            await ensureRipsIncapacidadOptions();
+            const incapOptions = await getRipIncapacidades();
+            // Map logic: '1' -> SI, '0' -> NO. Default to 'SI'/'NO' if not configured properly.
+            const siOption = incapOptions.find((o) => o.extraI === "1")?.codigo || "SI";
+            const noOption = incapOptions.find((o) => o.extraI === "0")?.codigo || "NO";
+
+            const allEncounterNumbers: number[] = [];
+            for (const selection of input.selections) {
+                for (const encId of selection.encounterIds) {
+                    const enc = encounterMap.get(encId);
+                    if (enc && enc.encounter) {
+                        allEncounterNumbers.push(enc.encounter);
+                    }
+                }
+            }
+
+            const billingOptions = await getBillingOptionsByEncounterIds(allEncounterNumbers);
+
+            const billingMap = new Map<number, number | null>();
+            for (const opt of billingOptions) {
+                if (opt.encounter) {
+                    billingMap.set(opt.encounter, opt.is_unable_to_work);
+                }
+            }
+
+            // 5. Create Generation Record to get Consecutive ID
             // Count total unique users being reported? Or just one record for the file?
             // "It should be a consecutive non repetitive number for every RIPS generated" -> File Sequence.
             // We'll create it now.
             const generationRecord = await createRipsGenerationRecord(input.selections.length, "RIPS_JSON");
             const consecutivoFile = generationRecord.id;
 
-            // 5. Build JSON
+            // 6. Build JSON
             const usuarios = [];
             let userConsecutive = 1;
 
@@ -84,37 +111,25 @@ const generateProcedure = os
 
                 if (patientEncounters.length === 0) continue; // Skip if no encounters selected (shouldn't happen if UI enforces it)
 
-            // RIPS JSON structure for one user
-            // Note: The prompt example structure groups services under the user.
-            // But usually RIPS reports services per invoice/encounter.
-            // If multiple encounters, we might need to aggregate them?
-            // "servicios": { "consultas": [...], ... }
-            // We will map encounters to "consultas" for now as a placeholder/start.
-            // Or leave "servicios" empty as requested ("ir paso a paso").
+                // Determine Incapacidad based on encounters
+                let incapacidad = noOption;
+                for (const encId of selection.encounterIds) {
+                    const enc = encounterMap.get(encId);
+                    if (!enc || !enc.encounter) continue;
 
-            // "numFactura": The prompt has it at "transaccion" level.
-            // "transaccion": { "numFactura": "FEV123", ... }
-            // This implies ONE invoice per file? Or does the JSON support multiple invoices?
-            // The JSON structure in the prompt:
-            /*
-            {
-              "transaccion": {
-                "numDocumentoIdObligado": "...",
-                "numFactura": "FEV123",
-                "usuarios": [ ... ]
-              }
-            }
-            */
-            // If the structure puts "numFactura" at the root ("transaccion"), then a RIPS file corresponds to ONE INVOICE.
-            // This means we should probably only allow selecting encounters from ONE invoice, or generate multiple files?
-            // OR, maybe the prompt's JSON example is simplified/specific.
-            // Usually RIPS (JSON) allows multiple invoices?
-            // Wait, looking at the JSON: "numFactura": "FEV123".
-            // If I select multiple encounters from different invoices, this structure breaks.
-            // **Assumption**: I will take the invoice number from the *first* selected encounter and assume all selected encounters belong to it,
-            // OR simply comma-separate them if multiple?
-            // Better: I will use the first encounter's invoice number for the root "numFactura".
-            // If the user selects encounters with different invoice numbers, this might be invalid RIPS, but I'll follow the structure provided.
+                    const isUnable = billingMap.get(enc.encounter);
+                    if (isUnable === 1) { // 1 is true
+                        incapacidad = siOption;
+                        break; // Found an affirmative, set to SI
+                    }
+                }
+
+                // RIPS JSON structure for one user
+                // ... (Logic continues) ...
+                // **Assumption**: I will take the invoice number from the *first* selected encounter and assume all selected encounters belong to it,
+                // OR simply comma-separate them if multiple?
+                // Better: I will use the first encounter's invoice number for the root "numFactura".
+                // If the user selects encounters with different invoice numbers, this might be invalid RIPS, but I'll follow the structure provided.
 
                 const userObj = {
                     tipoDocumentoIdentificacion: patient.document_type || "CC", // Default if missing
@@ -124,7 +139,7 @@ const generateProcedure = os
                     codSexo: patient.sex || "",
                     codPaisResidencia: patient.country_code || "170", // Colombia default
                     codMunicipioResidencia: patient.city || "", // Needs proper code
-                    incapacidad: "NO",
+                    incapacidad: incapacidad,
                     consecutivo: userConsecutive++,
                     servicios: {
                         consultas: [],
