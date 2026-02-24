@@ -1,0 +1,8 @@
+-- CreateTable
+CREATE TABLE "RipsGeneration" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "patientCount" INTEGER NOT NULL DEFAULT 0,
+    "fileName" TEXT
+);

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { eventIterator } from "@orpc/server";
 import { getSyncStatus, syncAllTables, type SyncEvent } from "./sync";
 import { queryReferenceRecords, getDistinctTableNames } from "./explorer";
+import { ripsRouter } from "./rips";
 
 const greet = os
     .input(z.object({ name: z.string() }))
@@ -77,4 +78,5 @@ export const router = {
     hello: { greet, ping },
     sync: { getStatus, syncAll },
     explorer: { getTableNames: explorerGetTableNames, query: explorerQuery },
+    rips: ripsRouter,
 };
