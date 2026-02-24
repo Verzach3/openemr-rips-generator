@@ -16,6 +16,10 @@ export async function getFacilityById(id: number) {
         .executeTakeFirst();
 }
 
+export async function getFacilities() {
+    return await openemrDb.selectFrom("facility").selectAll().limit(1).execute();
+}
+
 /**
  * Search facilities with dynamic criteria
  */

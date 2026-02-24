@@ -12,16 +12,25 @@ const server = serve({
   routes: {
     "/*": index,
     "/rpc/*": async (req: Request) => {
-      const { matched, response } = await rpcHandler.handle(req, {
-        prefix: "/rpc",
-        context: {},
-      });
+      try {
+        const { matched, response } = await rpcHandler.handle(req, {
+          prefix: "/rpc",
+          context: {},
+        });
 
-      if (matched) {
-        return response;
+        if (matched) {
+          return response;
+        }
+
+        return new Response("Not found", { status: 404 });
+      } catch (error) {
+        console.error("[rpc] Unhandled RPC error", {
+          method: req.method,
+          url: req.url,
+          error,
+        });
+        return new Response("Internal Server Error", { status: 500 });
       }
-
-      return new Response("Not found", { status: 404 });
     },
   },
 

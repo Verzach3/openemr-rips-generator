@@ -76,7 +76,7 @@ export const RipsPage = () => {
     if (selections.some((s) => s.patient.pid === patient.pid)) return;
 
     // Default user type (first one or generic)
-    const defaultUserType = userTypes.length > 0 ? userTypes[0].codigo : "01";
+    const defaultUserType = userTypes[0]?.codigo ?? "01";
 
     const newSelection: PatientSelection = {
       patient,
