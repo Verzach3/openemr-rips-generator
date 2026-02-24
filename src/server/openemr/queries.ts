@@ -143,3 +143,42 @@ export async function getPatientsRipsData(patientIds: number[]) {
         .where("pid", "in", patientIds)
         .execute();
 }
+
+/**
+ * Fetch billing options (including inability to work status) for specific encounters
+ */
+export async function getBillingOptionsByEncounterIds(encounterIds: number[]) {
+    if (encounterIds.length === 0) return [];
+
+    return await openemrDb
+        .selectFrom("form_misc_billing_options")
+        .select(["encounter", "is_unable_to_work"])
+        .where("encounter", "in", encounterIds)
+        .execute();
+}
+
+/**
+ * Fetch billing records for multiple encounters.
+ */
+export async function getBillingRecords(encounterIds: number[]) {
+    if (encounterIds.length === 0) return [];
+
+    return await openemrDb
+        .selectFrom("billing")
+        .select(["encounter", "code_type", "code", "fee", "date"])
+        .where("encounter", "in", encounterIds)
+        .execute();
+}
+
+/**
+ * Fetch prescriptions for multiple encounters.
+ */
+export async function getPrescriptions(encounterIds: number[]) {
+    if (encounterIds.length === 0) return [];
+
+    return await openemrDb
+        .selectFrom("prescriptions")
+        .select(["encounter", "rxnorm_drugcode", "drug", "quantity", "unit", "start_date"])
+        .where("encounter", "in", encounterIds)
+        .execute();
+}
