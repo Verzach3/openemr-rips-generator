@@ -156,3 +156,29 @@ export async function getBillingOptionsByEncounterIds(encounterIds: number[]) {
         .where("encounter", "in", encounterIds)
         .execute();
 }
+
+/**
+ * Fetch billing records for multiple encounters.
+ */
+export async function getBillingRecords(encounterIds: number[]) {
+    if (encounterIds.length === 0) return [];
+
+    return await openemrDb
+        .selectFrom("billing")
+        .select(["encounter", "code_type", "code", "fee", "date"])
+        .where("encounter", "in", encounterIds)
+        .execute();
+}
+
+/**
+ * Fetch prescriptions for multiple encounters.
+ */
+export async function getPrescriptions(encounterIds: number[]) {
+    if (encounterIds.length === 0) return [];
+
+    return await openemrDb
+        .selectFrom("prescriptions")
+        .select(["encounter", "rxnorm_drugcode", "drug", "quantity", "unit", "start_date"])
+        .where("encounter", "in", encounterIds)
+        .execute();
+}
