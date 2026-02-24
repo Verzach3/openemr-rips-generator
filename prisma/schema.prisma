@@ -50,3 +50,14 @@ model ReferenceRecord {
   @@index([tableName])
   @@index([codigo])
 }
+
+/// Tracks generated RIPS files to ensure consecutive numbering
+model RipsGeneration {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Could add more metadata here like filename, patient count, etc.
+  patientCount Int      @default(0)
+  fileName     String?
+}

@@ -1,4 +1,5 @@
 import type { Insertable, Updateable } from "kysely";
+import { sql } from "kysely";
 import { openemrDb } from "./db";
 import type { Facility } from "kysely-codegen";
 
@@ -68,5 +69,73 @@ export async function getBilledItemsByEncounter(encounterId: number) {
         .selectFrom("billing")
         .where("encounter", "=", encounterId)
         .selectAll()
+        .execute();
+}
+
+/**
+ * Search patients by name or ID
+ */
+export async function searchPatients(term: string) {
+    // basic sanitization/logic handled by kysely params
+    const termLike = `%${term}%`;
+    const termNum = parseInt(term, 10);
+
+    return await openemrDb
+        .selectFrom("patient_data")
+        .select(["pid", "fname", "mname", "lname", "DOB", "sex", "ss"])
+        .where((eb) => {
+            const conditions = [
+                eb("fname", "like", termLike),
+                eb("lname", "like", termLike),
+                eb("ss", "like", termLike)
+            ];
+            if (!isNaN(termNum)) {
+                conditions.push(eb("pid", "=", termNum));
+            }
+            return eb.or(conditions);
+        })
+        .limit(20)
+        .execute();
+}
+
+/**
+ * Get encounters for a list of patients, optionally filtered by date
+ */
+export async function getEncountersForPatients(patientIds: number[], startDate?: Date, endDate?: Date) {
+    let query = openemrDb
+        .selectFrom("form_encounter")
+        .select(["id", "date", "encounter", "pid", "invoice_refno", "reason"])
+        .where("pid", "in", patientIds);
+
+    if (startDate) {
+        query = query.where("date", ">=", startDate);
+    }
+    if (endDate) {
+        query = query.where("date", "<=", endDate);
+    }
+
+    return await query.orderBy("date", "desc").execute();
+}
+
+/**
+ * Get detailed patient data needed for RIPS generation
+ */
+export async function getPatientsRipsData(patientIds: number[]) {
+    return await openemrDb
+        .selectFrom("patient_data")
+        .select([
+            "pid",
+            "fname",
+            "mname",
+            "lname",
+            "DOB",
+            "sex",
+            "ss",
+            "country_code",
+            "city",
+            // Use sql for document_type as it might not be in the generated types yet
+            sql<string>`document_type`.as("document_type")
+        ])
+        .where("pid", "in", patientIds)
         .execute();
 }

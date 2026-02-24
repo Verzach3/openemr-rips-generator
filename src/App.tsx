@@ -3,6 +3,7 @@ import { Link, Route, Switch } from "wouter";
 import { orpc } from "./lib/orpc";
 import { SyncPage } from "./SyncPage";
 import { ExplorerPage } from "./ExplorerPage";
+import { RipsPage } from "./pages/RipsPage";
 import "./index.css";
 
 const Home = () => (
@@ -14,7 +15,9 @@ const Home = () => (
     <div className="enterprise-panel mt-6">
       <h2 className="text-lg font-bold text-gray-900 mb-2 border-b border-gray-200 pb-2">Quick Actions</h2>
       <p className="text-gray-700 text-sm mb-4">Select an action to get started with the OpenEMR RIPS Generator.</p>
-      <button className="btn-primary">Generate Report</button>
+      <Link href="/rips">
+        <button className="btn-primary">Generate RIPS</button>
+      </Link>
     </div>
   </div>
 );
@@ -152,6 +155,9 @@ export function App() {
                 <Link href="/explorer" className={(active) => active ? "active-nav-link" : "nav-link"}>
                   Explorer
                 </Link>
+                <Link href="/rips" className={(active) => active ? "active-nav-link" : "nav-link"}>
+                  RIPS
+                </Link>
                 <Link href="/api" className={(active) => active ? "active-nav-link" : "nav-link"}>
                   API
                 </Link>
@@ -169,6 +175,7 @@ export function App() {
           <Route path="/" component={Home} />
           <Route path="/sync" component={SyncPage} />
           <Route path="/explorer" component={ExplorerPage} />
+          <Route path="/rips" component={RipsPage} />
           <Route path="/api" component={ApiPage} />
           <Route path="/about" component={About} />
           <Route>
