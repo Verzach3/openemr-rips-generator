@@ -28,7 +28,6 @@ type UserType = {
 type PatientSelection = {
   patient: Patient;
   selectedEncounterIds: number[];
-  userType: string;
   encounters: Encounter[];
 };
 
@@ -40,9 +39,6 @@ export const RipsPage = () => {
   // Selected patients and their configuration
   const [selections, setSelections] = useState<PatientSelection[]>([]);
 
-  // Meta data
-  const [userTypes, setUserTypes] = useState<UserType[]>([]);
-
   // Global Filters
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
@@ -51,11 +47,6 @@ export const RipsPage = () => {
   const [generatedResult, setGeneratedResult] = useState<{ json: any; filename: string; consecutivo: number } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Load User Types
-  useEffect(() => {
-    orpc.rips.getMetaData().then((types) => setUserTypes(types));
-  }, []);
 
   // Search Patients
   const handleSearch = async () => {
@@ -75,13 +66,9 @@ export const RipsPage = () => {
   const handleAddPatient = async (patient: Patient) => {
     if (selections.some((s) => s.patient.pid === patient.pid)) return;
 
-    // Default user type (first one or generic)
-    const defaultUserType = userTypes[0]?.codigo ?? "01";
-
     const newSelection: PatientSelection = {
       patient,
       selectedEncounterIds: [],
-      userType: defaultUserType,
       encounters: [],
     };
 
@@ -143,10 +130,6 @@ export const RipsPage = () => {
     );
   };
 
-  const updateUserType = (pid: number, type: string) => {
-    setSelections(prev => prev.map(s => s.patient.pid === pid ? { ...s, userType: type } : s));
-  };
-
   const handleGenerate = async () => {
     setGenerating(true);
     setError(null);
@@ -167,7 +150,7 @@ export const RipsPage = () => {
         selections: validSelections.map(s => ({
           patientId: s.patient.pid,
           encounterIds: s.selectedEncounterIds,
-          userType: s.userType
+          // userType removed, inferred by backend
         }))
       };
 
@@ -291,20 +274,6 @@ export const RipsPage = () => {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 mb-3">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">User Type (RIPS)</label>
-                      <select
-                        className="w-full border border-gray-300 px-2 py-1 text-sm"
-                        value={item.userType}
-                        onChange={(e) => updateUserType(item.patient.pid, e.target.value)}
-                      >
-                        {userTypes.map(type => (
-                          <option key={type.codigo} value={type.codigo}>
-                            {type.codigo} - {type.nombre}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
                     <div className="flex items-end text-xs text-gray-500">
                       {item.encounters.length} encounters found
                     </div>

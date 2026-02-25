@@ -86,12 +86,15 @@ export async function searchPatients(term: string) {
 
     return await openemrDb
         .selectFrom("patient_data")
-        .select(["pid", "fname", "mname", "lname", "DOB", "sex", "ss"])
+        .select(["pid", "fname", "mname", "lname", "DOB", "sex", "ss", sql<string>`user_type`.as("user_type")])
         .where((eb) => {
             const conditions = [
                 eb("fname", "like", termLike),
                 eb("lname", "like", termLike),
-                eb("ss", "like", termLike)
+                eb("mname", "like", termLike),
+                eb("ss", "like", termLike),
+                eb(sql<string>`CONCAT_WS(' ', fname, lname)`, "like", termLike),
+                eb(sql<string>`CONCAT_WS(' ', fname, mname, lname)`, "like", termLike)
             ];
             if (!isNaN(termNum)) {
                 conditions.push(eb("pid", "=", termNum));
@@ -138,7 +141,8 @@ export async function getPatientsRipsData(patientIds: number[]) {
             "country_code",
             "city",
             // Use sql for document_type as it might not be in the generated types yet
-            sql<string>`document_type`.as("document_type")
+            sql<string>`document_type`.as("document_type"),
+            sql<string>`user_type`.as("user_type")
         ])
         .where("pid", "in", patientIds)
         .execute();
