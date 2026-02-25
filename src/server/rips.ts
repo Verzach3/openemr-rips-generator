@@ -35,7 +35,7 @@ const generateProcedure = os
                 z.object({
                     patientId: z.number(),
                     encounterIds: z.array(z.number()),
-                    userType: z.string(), // Código from ReferenceRecord
+                    userType: z.string().optional(), // Código from ReferenceRecord (optional now, inferred from DB if possible)
                 })
             ),
         })
@@ -257,7 +257,7 @@ const generateProcedure = os
                 const userObj = {
                     tipoDocumentoIdentificacion: patient.document_type || "CC", // Default if missing
                     numDocumentoIdentificacion: patient.ss || "",
-                    tipoUsuario: selection.userType,
+                    tipoUsuario: patient.user_type || selection.userType || "", // Use DB value first, then selection, then empty
                     fechaNacimiento: patient.DOB ? new Date(patient.DOB).toISOString().split('T')[0] : "",
                     codSexo: patient.sex || "",
                     codPaisResidencia: patient.country_code || "170", // Colombia default
