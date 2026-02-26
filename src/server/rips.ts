@@ -213,52 +213,64 @@ const generateProcedure = os
                         procedimientos.push({
                             codPrestador: facility.federal_ein || "",
                             fechaInicioAtencion: proc.date ? new Date(proc.date).toISOString() : (enc.date ? new Date(enc.date).toISOString() : ""),
-                            idMIPRES: "", // Missing
-                            numAutorizacion: "", // Missing
+                            idMIPRES: null, // P03: Skipped/Null per request
+                            numAutorizacion: "", // P04
                             codProcedimiento: proc.code || "",
-                            viaIngresoServicio: "", // Missing
-                            modalidadGrupoServicio: "", // Missing
-                            grupoServicios: "", // Missing
-                            codServicio: "", // Missing
-                            finalidadTecnologiaSalud: "", // Missing
-                            tipoDocumentoIdentificacion: patient.document_type || "CC",
-                            numDocumentoIdentificacion: patient.ss || "",
+                            viaIngresoServicio: "01", // P06: Default Ambulatorio?
+                            modalidadGrupoServicio: "01", // Default Intramural
+                            grupoServicios: "01", // Default Consulta Externa
+                            codServicio: "348", // Placeholder
+                            finalidadTecnologiaSalud: "44", // P10: Default Promocion/Prevencion or 10?
+                            tipoDocumentoIdentificacion: "CC", // P11: Provider Doc Type
+                            numDocumentoIdentificacion: provider ? (provider.federaltaxid || provider.npi || "") : "", // P12
                             codDiagnosticoPrincipal: codDiagnosticoPrincipal,
                             codDiagnosticoRelacionado: diagnoses.length > 1 ? (diagnoses[1]?.code || "") : "",
-                            codComplicacion: "", // Missing
+                            codComplicacion: "",
                             valorPagoModerador: 0,
                             valorProcedimiento: Number(proc.fee) || 0,
-                            conceptoRecaudo: "", // Missing
-                            numFEVPagoModerador: "", // Missing
+                            conceptoRecaudo: "05", // P17: No aplica
+                            numFEVPagoModerador: "",
                             consecutivo: procedimientos.length + 1
                         });
                     }
 
                     // 3. Medicamentos
                     for (const med of presItems) {
+                        // Prescriber (Provider) might be different for medications if fetched from prescription table,
+                        // but our query joins simply on encounter or patient.
+                        // We updated getPrescriptions to fetch provider_id, let's look it up.
+                        const medProvider = med.provider_id ? providerMap.get(med.provider_id) : provider;
+
+                        // Calculate days treatment
+                        let diasTratamiento = 0;
+                        if (med.start_date && med.end_date) {
+                            const diffTime = Math.abs(new Date(med.end_date).getTime() - new Date(med.start_date).getTime());
+                            diasTratamiento = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        }
+
                         medicamentos.push({
                             codPrestador: facility.federal_ein || "",
-                            numAutorizacion: "", // Missing
-                            idMIPRES: "", // Missing
+                            numAutorizacion: "",
+                            idMIPRES: null,
                             fechaDispencr: med.start_date ? new Date(med.start_date).toISOString() : (enc.date ? new Date(enc.date).toISOString() : ""),
                             codDiagnosticoPrincipal: codDiagnosticoPrincipal,
                             codDiagnosticoRelacionado: diagnoses.length > 1 ? (diagnoses[1]?.code || "") : "",
-                            tipoMedicamento: "", // Missing
-                            codTecnologiaSalud: med.rxnorm_drugcode || "",
+                            tipoMedicamento: "01", // M07: Default to POS (01)
+                            codTecnologiaSalud: med.rxnorm_drugcode || "", // M08
                             nomTecnologiaSalud: med.drug || "",
-                            concentracionMedicamento: 0, // Missing
-                            unidadMedida: "", // Missing
-                            formaFarmaceutica: "", // Missing
-                            unidadMinDispensacion: "", // Missing
+                            concentracionMedicamento: 0, // M10: Skipped
+                            unidadMedida: "", // M11: Skipped
+                            formaFarmaceutica: "", // M12: Skipped
+                            unidadMinDispensacion: "", // M13: Skipped
                             cantidadMedicamento: Number(med.quantity) || 0,
-                            diasTratamiento: 0, // Missing
-                            tipoDocumentoIdentificacion: patient.document_type || "CC",
-                            numDocumentoIdentificacion: patient.ss || "",
+                            diasTratamiento: diasTratamiento, // M15
+                            tipoDocumentoIdentificacion: "CC", // M16
+                            numDocumentoIdentificacion: medProvider ? (medProvider.federaltaxid || medProvider.npi || "") : "", // M17
                             valorPagoModerador: 0,
-                            valorUnitarioMedicamento: 0, // Missing
-                            valorServicio: 0, // Missing
-                            conceptoRecaudo: "", // Missing
-                            numFEVPagoModerador: "", // Missing
+                            valorUnitarioMedicamento: 0, // M18: Usually 0 if not dispensed/billed
+                            valorServicio: 0, // M19
+                            conceptoRecaudo: "05", // M20
+                            numFEVPagoModerador: "",
                             consecutivo: medicamentos.length + 1
                         });
                     }

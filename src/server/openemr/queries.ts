@@ -195,7 +195,7 @@ export async function getPrescriptions(encounterIds: number[]) {
 
     return await openemrDb
         .selectFrom("prescriptions")
-        .select(["encounter", "rxnorm_drugcode", "drug", "quantity", "unit", "start_date"])
+        .select(["encounter", "rxnorm_drugcode", "drug", "quantity", "unit", "start_date", "end_date", "provider_id"])
         .where("encounter", "in", encounterIds)
         .execute();
 }

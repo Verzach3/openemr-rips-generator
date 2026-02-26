@@ -290,9 +290,43 @@ function validateServices(servicios: any, userScope: string, errors: ValidationE
     if (Array.isArray(servicios.procedimientos)) {
         servicios.procedimientos.forEach((p: any, i: number) => {
             const scope = `${userScope} > Procedimiento ${p.consecutivo || i + 1}`;
-             if (!p.codPrestador) errors.push({ scope, field: "codPrestador", message: "Required", value: null, severity: "error" });
-             if (!p.fechaInicioAtencion) errors.push({ scope, field: "fechaInicioAtencion", message: "Required", value: null, severity: "error" });
-             if (!p.codProcedimiento) errors.push({ scope, field: "codProcedimiento", message: "Required", value: null, severity: "error" });
+
+            // P01: Provider Code - 12 chars
+            if (!p.codPrestador) {
+                errors.push({ scope, field: "codPrestador", message: "Required", value: null, severity: "error" });
+            } else if (p.codPrestador.length !== 12) {
+                errors.push({ scope, field: "codPrestador", message: "Must be exactly 12 characters", value: p.codPrestador, severity: "error" });
+            }
+
+            // P02: Date
+            if (!p.fechaInicioAtencion || isNaN(Date.parse(p.fechaInicioAtencion))) {
+                errors.push({ scope, field: "fechaInicioAtencion", message: "Invalid Date Format", value: p.fechaInicioAtencion, severity: "error" });
+            }
+
+            // P05: CUPS Code
+            if (!p.codProcedimiento) {
+                 errors.push({ scope, field: "codProcedimiento", message: "Required", value: null, severity: "error" });
+            }
+
+            // P06: Via Ingreso (Simple check against basic expected list if needed, or just presence)
+            if (!["01", "02", "03", "04"].includes(p.viaIngresoServicio)) {
+                 errors.push({ scope, field: "viaIngresoServicio", message: "Invalid Via Ingreso Code", value: p.viaIngresoServicio, severity: "error" });
+            }
+
+            // P10: Finalidad
+            if (!p.finalidadTecnologiaSalud) {
+                errors.push({ scope, field: "finalidadTecnologiaSalud", message: "Required", value: null, severity: "error" });
+            }
+
+            // P16: Value (Must be > 1 if event based, typically > 0)
+            if (p.valorProcedimiento < 0) {
+                 errors.push({ scope, field: "valorProcedimiento", message: "Cannot be negative", value: p.valorProcedimiento, severity: "error" });
+            }
+
+            // P17: Concepto Recaudo
+            if (!VALID_CONCEPTO_RECAUDO.includes(p.conceptoRecaudo)) {
+                 errors.push({ scope, field: "conceptoRecaudo", message: "Invalid Concepto Recaudo", value: p.conceptoRecaudo, severity: "error" });
+            }
         });
     }
 
@@ -300,8 +334,45 @@ function validateServices(servicios: any, userScope: string, errors: ValidationE
     if (Array.isArray(servicios.medicamentos)) {
         servicios.medicamentos.forEach((m: any, i: number) => {
              const scope = `${userScope} > Medicamento ${m.consecutivo || i + 1}`;
+
+             // M01: Provider Code - 12 chars
+            if (!m.codPrestador) {
+                errors.push({ scope, field: "codPrestador", message: "Required", value: null, severity: "error" });
+            } else if (m.codPrestador.length !== 12) {
+                errors.push({ scope, field: "codPrestador", message: "Must be exactly 12 characters", value: m.codPrestador, severity: "error" });
+            }
+
+            // M04: Date
+            if (!m.fechaDispencr || isNaN(Date.parse(m.fechaDispencr))) {
+                errors.push({ scope, field: "fechaDispencr", message: "Invalid Date Format", value: m.fechaDispencr, severity: "error" });
+            }
+
+            // M05: Diagnosis
+            if (!m.codDiagnosticoPrincipal) {
+                errors.push({ scope, field: "codDiagnosticoPrincipal", message: "Required", value: null, severity: "error" });
+            }
+
+            // M07: Type (Usually 01-POS)
+            if (!m.tipoMedicamento) {
+                errors.push({ scope, field: "tipoMedicamento", message: "Required", value: null, severity: "error" });
+            }
+
              if (!m.codTecnologiaSalud) errors.push({ scope, field: "codTecnologiaSalud", message: "Required", value: null, severity: "error" });
              if (!m.nomTecnologiaSalud) errors.push({ scope, field: "nomTecnologiaSalud", message: "Required", value: null, severity: "error" });
+
+             // M15: Days Treatment (integer, max 3 chars -> < 1000)
+             if (m.diasTratamiento < 0 || m.diasTratamiento > 999 || !Number.isInteger(m.diasTratamiento)) {
+                  errors.push({ scope, field: "diasTratamiento", message: "Invalid Days (0-999)", value: m.diasTratamiento, severity: "error" });
+             }
+
+             // M18/M19: Value
+             if (m.valorUnitarioMedicamento < 0) errors.push({ scope, field: "valorUnitarioMedicamento", message: "Cannot be negative", value: m.valorUnitarioMedicamento, severity: "error" });
+             if (m.valorServicio < 0) errors.push({ scope, field: "valorServicio", message: "Cannot be negative", value: m.valorServicio, severity: "error" });
+
+             // M20: Concepto Recaudo
+            if (!VALID_CONCEPTO_RECAUDO.includes(m.conceptoRecaudo)) {
+                 errors.push({ scope, field: "conceptoRecaudo", message: "Invalid Concepto Recaudo", value: m.conceptoRecaudo, severity: "error" });
+            }
         });
     }
 }
