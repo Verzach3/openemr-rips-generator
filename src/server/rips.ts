@@ -3,6 +3,10 @@ import { z } from "zod";
 import { searchPatients, getEncountersForPatients, getPatientsRipsData, getFacilityById, getFacilities, getBillingOptionsByEncounterIds, getBillingRecords, getPrescriptions, getProvidersByIds } from "./openemr/queries";
 import { getRipUserTypes, createRipsGenerationRecord, ensureRipsIncapacidadOptions, getRipIncapacidades } from "./rips-helper";
 import { validateRipsJson } from "./rips-validator";
+import { mapTransaction } from "./rips/mappers/transaction-mapper";
+import { mapUser } from "./rips/mappers/user-mapper";
+import { mapConsultation, mapMedication, mapProcedure } from "./rips/mappers/service-mapper";
+import type { RipsServices, RipsUser } from "./rips/types";
 
 const searchPatientsProcedure = os
     .input(z.object({ term: z.string().min(1) }))
@@ -128,14 +132,11 @@ const generateProcedure = os
             }
 
             // 5. Create Generation Record to get Consecutive ID
-            // Count total unique users being reported? Or just one record for the file?
-            // "It should be a consecutive non repetitive number for every RIPS generated" -> File Sequence.
-            // We'll create it now.
             const generationRecord = await createRipsGenerationRecord(input.selections.length, "RIPS_JSON");
             const consecutivoFile = generationRecord.id;
 
-            // 6. Build JSON
-            const usuarios = [];
+            // 6. Build JSON using Mappers
+            const ripsUsers: RipsUser[] = [];
             let userConsecutive = 1;
 
             for (const selection of input.selections) {
@@ -146,7 +147,7 @@ const generateProcedure = os
                     .map((id) => encounterMap.get(id))
                     .filter((e) => e !== undefined);
 
-                if (patientEncounters.length === 0) continue; // Skip if no encounters selected (shouldn't happen if UI enforces it)
+                if (patientEncounters.length === 0) continue;
 
                 // Determine Incapacidad based on encounters
                 let incapacidad = noOption;
@@ -161,10 +162,16 @@ const generateProcedure = os
                     }
                 }
 
-                // Collect Services
-                const consultas = [];
-                const procedimientos = [];
-                const medicamentos = [];
+                // Initialize Services Container
+                const services: RipsServices = {
+                    consultas: [],
+                    procedimientos: [],
+                    medicamentos: [],
+                    urgencias: [],
+                    hospitalizacion: [],
+                    recienNacidos: [],
+                    otrosServicios: []
+                };
 
                 for (const enc of patientEncounters) {
                     if (!enc.encounter) continue;
@@ -176,139 +183,33 @@ const generateProcedure = os
                     const diagnoses = billingItems.filter(b => b.code_type === 'RIPS');
                     const procedures = billingItems.filter(b => b.code_type === '4');
 
-                    // Primary Diagnosis Code (Use the first one found, or empty/default)
-                    const codDiagnosticoPrincipal = diagnoses.length > 0 ? (diagnoses[0]?.code || "") : "";
+                    // 1. Map Consultas (Treat every encounter as a Consulta)
+                    services.consultas.push(
+                        mapConsultation(enc, facility.federal_ein || "", diagnoses, providerMap, services.consultas.length + 1)
+                    );
 
-                    // Provider Info
-                    const provider = enc.provider_id ? providerMap.get(enc.provider_id) : undefined;
-
-                    // 1. Consultas (Treat every encounter as a Consulta)
-                    // We attempt to map fields better now, but default to empty/placeholders if missing in OpenEMR data
-                    consultas.push({
-                        codPrestador: facility.federal_ein || "",
-                        fechaInicioAtencion: enc.date ? new Date(enc.date).toISOString() : "",
-                        numAutorizacion: "", // Not usually in basic encounter data
-                        codConsulta: "", // Needs specific CUPS code from billing if applicable, but often encounter doesn't link directly to one "consult code" easily without logic.
-                        modalidadGrupoServicio: "01", // Default to Intramural (01) as common case
-                        grupoServicios: "01", // Default to Consulta Externa (01)
-                        codServicio: "348", // Example or default? Left empty if unsure, but user asked to map. Let's leave empty for validator to catch if missing.
-                        finalidadTecnologiaSalud: "10", // Default: No aplica? Or 44 (Promocion)? Without specific mapping, this is a guess.
-                        causaMotivoAtencion: "38", // Default: Enfermedad General?
-                        codDiagnosticoPrincipal: codDiagnosticoPrincipal,
-                        codDiagnosticoRelacionado1: diagnoses.length > 1 ? (diagnoses[1]?.code || "") : "",
-                        codDiagnosticoRelacionado2: diagnoses.length > 2 ? (diagnoses[2]?.code || "") : "",
-                        codDiagnosticoRelacionado3: diagnoses.length > 3 ? (diagnoses[3]?.code || "") : "",
-                        tipoDiagnosticoPrincipal: "01", // Impresion Diagnostica
-                        tipoDocumentoIdentificacion: "CC", // Provider Doc Type - Defaulting to CC
-                        numDocumentoIdentificacion: provider ? (provider.federaltaxid || provider.npi || "") : "",
-                        valorPagoModerador: 0,
-                        valorConsulta: 0, // Should sum fees?
-                        conceptoRecaudo: "05", // No aplica / Ninguno?
-                        numFEVPagoModerador: "",
-                        consecutivo: consultas.length + 1
-                    });
-
-                    // 2. Procedimientos
+                    // 2. Map Procedimientos
                     for (const proc of procedures) {
-                        procedimientos.push({
-                            codPrestador: facility.federal_ein || "",
-                            fechaInicioAtencion: proc.date ? new Date(proc.date).toISOString() : (enc.date ? new Date(enc.date).toISOString() : ""),
-                            idMIPRES: null, // P03: Skipped/Null per request
-                            numAutorizacion: "", // P04
-                            codProcedimiento: proc.code || "",
-                            viaIngresoServicio: "01", // P06: Default Ambulatorio?
-                            modalidadGrupoServicio: "01", // Default Intramural
-                            grupoServicios: "01", // Default Consulta Externa
-                            codServicio: "348", // Placeholder
-                            finalidadTecnologiaSalud: "44", // P10: Default Promocion/Prevencion or 10?
-                            tipoDocumentoIdentificacion: "CC", // P11: Provider Doc Type
-                            numDocumentoIdentificacion: provider ? (provider.federaltaxid || provider.npi || "") : "", // P12
-                            codDiagnosticoPrincipal: codDiagnosticoPrincipal,
-                            codDiagnosticoRelacionado: diagnoses.length > 1 ? (diagnoses[1]?.code || "") : "",
-                            codComplicacion: "",
-                            valorPagoModerador: 0,
-                            valorProcedimiento: Number(proc.fee) || 0,
-                            conceptoRecaudo: "05", // P17: No aplica
-                            numFEVPagoModerador: "",
-                            consecutivo: procedimientos.length + 1
-                        });
+                        services.procedimientos.push(
+                            mapProcedure(proc, enc, facility.federal_ein || "", diagnoses, providerMap, services.procedimientos.length + 1)
+                        );
                     }
 
-                    // 3. Medicamentos
+                    // 3. Map Medicamentos
                     for (const med of presItems) {
-                        // Prescriber (Provider) might be different for medications if fetched from prescription table,
-                        // but our query joins simply on encounter or patient.
-                        // We updated getPrescriptions to fetch provider_id, let's look it up.
-                        const medProvider = med.provider_id ? providerMap.get(med.provider_id) : provider;
-
-                        // Calculate days treatment
-                        let diasTratamiento = 0;
-                        if (med.start_date && med.end_date) {
-                            const diffTime = Math.abs(new Date(med.end_date).getTime() - new Date(med.start_date).getTime());
-                            diasTratamiento = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                        }
-
-                        medicamentos.push({
-                            codPrestador: facility.federal_ein || "",
-                            numAutorizacion: "",
-                            idMIPRES: null,
-                            fechaDispencr: med.start_date ? new Date(med.start_date).toISOString() : (enc.date ? new Date(enc.date).toISOString() : ""),
-                            codDiagnosticoPrincipal: codDiagnosticoPrincipal,
-                            codDiagnosticoRelacionado: diagnoses.length > 1 ? (diagnoses[1]?.code || "") : "",
-                            tipoMedicamento: "01", // M07: Default to POS (01)
-                            codTecnologiaSalud: med.rxnorm_drugcode || "", // M08
-                            nomTecnologiaSalud: med.drug || "",
-                            concentracionMedicamento: 0, // M10: Skipped
-                            unidadMedida: "", // M11: Skipped
-                            formaFarmaceutica: "", // M12: Skipped
-                            unidadMinDispensacion: "", // M13: Skipped
-                            cantidadMedicamento: Number(med.quantity) || 0,
-                            diasTratamiento: diasTratamiento, // M15
-                            tipoDocumentoIdentificacion: "CC", // M16
-                            numDocumentoIdentificacion: medProvider ? (medProvider.federaltaxid || medProvider.npi || "") : "", // M17
-                            valorPagoModerador: 0,
-                            valorUnitarioMedicamento: 0, // M18: Usually 0 if not dispensed/billed
-                            valorServicio: 0, // M19
-                            conceptoRecaudo: "05", // M20
-                            numFEVPagoModerador: "",
-                            consecutivo: medicamentos.length + 1
-                        });
+                        services.medicamentos.push(
+                            mapMedication(med, enc, facility.federal_ein || "", diagnoses, providerMap, services.medicamentos.length + 1)
+                        );
                     }
                 }
 
-                // RIPS JSON structure for one user
-                // ... (Logic continues) ...
-                // **Assumption**: I will take the invoice number from the *first* selected encounter and assume all selected encounters belong to it,
-                // OR simply comma-separate them if multiple?
-                // Better: I will use the first encounter's invoice number for the root "numFactura".
-                // If the user selects encounters with different invoice numbers, this might be invalid RIPS, but I'll follow the structure provided.
-
-                const userObj = {
-                    tipoDocumentoIdentificacion: patient.document_type || "CC", // Default if missing
-                    numDocumentoIdentificacion: patient.ss || "",
-                    tipoUsuario: patient.user_type || selection.userType || "", // Use DB value first, then selection, then empty
-                    fechaNacimiento: patient.DOB ? new Date(patient.DOB).toISOString().split('T')[0] : "",
-                    codSexo: patient.sex || "",
-                    codPaisResidencia: patient.country_code || "170", // Colombia default
-                    codMunicipioResidencia: patient.city || "", // Needs proper code
-                    incapacidad: incapacidad,
-                    consecutivo: userConsecutive++,
-                    servicios: {
-                        consultas: consultas,
-                        procedimientos: procedimientos,
-                        medicamentos: medicamentos,
-                        urgencias: [],
-                        hospitalizacion: [],
-                        recienNacidos: [],
-                        otrosServicios: []
-                    }
-                };
-                usuarios.push(userObj);
+                // Map User
+                ripsUsers.push(
+                    mapUser(patient, selection.userType, incapacidad, userConsecutive++, services)
+                );
             }
 
-            // Get invoice number from the first selected encounter of the first patient (best guess for single-invoice RIPS)
-            // Or if the user selects multiple, maybe we should warn?
-            // For now, simple implementation.
+            // Get invoice number from the first selected encounter of the first patient
             let numFactura = "";
             const firstSelection = input.selections[0];
             if (firstSelection) {
@@ -319,14 +220,9 @@ const generateProcedure = os
                 }
             }
 
+            // Map Final Transaction
             const ripsJson = {
-                transaccion: {
-                    numDocumentoIdObligado: facility.federal_ein || "",
-                    numFactura: numFactura,
-                    tipoNota: null,
-                    numNota: null,
-                    usuarios: usuarios
-                }
+                transaccion: mapTransaction(facility.federal_ein || "", numFactura, ripsUsers)
             };
 
             const validationErrors = validateRipsJson(ripsJson);
