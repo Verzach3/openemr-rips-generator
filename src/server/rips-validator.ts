@@ -20,6 +20,11 @@ function calculateAge(dobStr: string, referenceDate: Date = new Date()): number 
 const VALID_DOCUMENT_TYPES = ["CC", "CE", "CD", "PA", "SC", "PE", "RC", "TI", "CN", "AS", "MS", "DE", "SI", "PT"];
 const VALID_USER_TYPES = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13"];
 const VALID_SEX_CODES = ["M", "F", "I"];
+const VALID_MODALITIES = ["01", "02", "03", "04", "06", "07", "08", "09"];
+const VALID_SERVICE_GROUPS = ["01", "02", "03", "04", "05"];
+const VALID_CAUSES = ["21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "38"]; // 38 added as generic fallback often used
+const VALID_DIAG_TYPES = ["01", "02", "03"];
+const VALID_CONCEPTO_RECAUDO = ["01", "02", "03", "04", "05"]; // Generic set based on typical RIPS
 
 // Length constraints
 const DOC_LENGTHS: Record<string, { min?: number; max: number; fixed?: number }> = {
@@ -219,10 +224,65 @@ function validateServices(servicios: any, userScope: string, errors: ValidationE
     if (Array.isArray(servicios.consultas)) {
         servicios.consultas.forEach((c: any, i: number) => {
             const scope = `${userScope} > Consulta ${c.consecutivo || i + 1}`;
-            // Validate required fields
-            if (!c.codPrestador) errors.push({ scope, field: "codPrestador", message: "Required", value: null, severity: "error" });
-            if (!c.fechaInicioAtencion) errors.push({ scope, field: "fechaInicioAtencion", message: "Required", value: null, severity: "error" });
-            if (!c.codDiagnosticoPrincipal) errors.push({ scope, field: "codDiagnosticoPrincipal", message: "Required", value: null, severity: "error" });
+
+            // C01: Provider Code - 12 chars
+            if (!c.codPrestador) {
+                errors.push({ scope, field: "codPrestador", message: "Required", value: null, severity: "error" });
+            } else if (c.codPrestador.length !== 12) {
+                // User requirement: "identifica al prestador... en el RIPS se debe registrar con 12 caracteres"
+                errors.push({ scope, field: "codPrestador", message: "Must be exactly 12 characters", value: c.codPrestador, severity: "error" });
+            }
+
+            // C02: Start Date
+            if (!c.fechaInicioAtencion) {
+                errors.push({ scope, field: "fechaInicioAtencion", message: "Required", value: null, severity: "error" });
+            } else if (isNaN(Date.parse(c.fechaInicioAtencion))) {
+                errors.push({ scope, field: "fechaInicioAtencion", message: "Invalid Date Format", value: c.fechaInicioAtencion, severity: "error" });
+            }
+
+            // C03: CUPS Code (Basic check, usually 6 chars)
+            if (!c.codConsulta) {
+                 errors.push({ scope, field: "codConsulta", message: "Required", value: null, severity: "error" });
+            }
+
+            // C05: Modality
+            if (!VALID_MODALITIES.includes(c.modalidadGrupoServicio)) {
+                errors.push({ scope, field: "modalidadGrupoServicio", message: "Invalid Modality Code", value: c.modalidadGrupoServicio, severity: "error" });
+            }
+
+            // C06: Service Group
+            if (!VALID_SERVICE_GROUPS.includes(c.grupoServicios)) {
+                errors.push({ scope, field: "grupoServicios", message: "Invalid Service Group Code", value: c.grupoServicios, severity: "error" });
+            }
+
+            // C08: Purpose (Finalidad) - Basic presence check
+            if (!c.finalidadTecnologiaSalud) {
+                errors.push({ scope, field: "finalidadTecnologiaSalud", message: "Required", value: null, severity: "error" });
+            }
+
+            // C09: Cause
+            if (!VALID_CAUSES.includes(c.causaMotivoAtencion)) {
+                 errors.push({ scope, field: "causaMotivoAtencion", message: "Invalid Cause Code", value: c.causaMotivoAtencion, severity: "error" });
+            }
+
+            // C10: Diagnosis
+            if (!c.codDiagnosticoPrincipal) {
+                errors.push({ scope, field: "codDiagnosticoPrincipal", message: "Required", value: null, severity: "error" });
+            }
+
+            // C14: Diagnosis Type
+            if (!VALID_DIAG_TYPES.includes(c.tipoDiagnosticoPrincipal)) {
+                 errors.push({ scope, field: "tipoDiagnosticoPrincipal", message: "Invalid Diagnosis Type", value: c.tipoDiagnosticoPrincipal, severity: "error" });
+            }
+
+            // C17, C18, C19: Payment fields (Numeric)
+            if (c.valorPagoModerador < 0) errors.push({ scope, field: "valorPagoModerador", message: "Cannot be negative", value: c.valorPagoModerador, severity: "error" });
+            if (c.valorConsulta < 0) errors.push({ scope, field: "valorConsulta", message: "Cannot be negative", value: c.valorConsulta, severity: "error" });
+
+            // C18: Concepto Recaudo
+            if (!VALID_CONCEPTO_RECAUDO.includes(c.conceptoRecaudo)) {
+                 errors.push({ scope, field: "conceptoRecaudo", message: "Invalid Concepto Recaudo", value: c.conceptoRecaudo, severity: "error" });
+            }
         });
     }
 

@@ -111,7 +111,7 @@ export async function searchPatients(term: string) {
 export async function getEncountersForPatients(patientIds: number[], startDate?: Date, endDate?: Date) {
     let query = openemrDb
         .selectFrom("form_encounter")
-        .select(["id", "date", "encounter", "pid", "invoice_refno", "reason"])
+        .select(["id", "date", "encounter", "pid", "invoice_refno", "reason", "provider_id"])
         .where("pid", "in", patientIds);
 
     if (startDate) {
@@ -158,6 +158,19 @@ export async function getBillingOptionsByEncounterIds(encounterIds: number[]) {
         .selectFrom("form_misc_billing_options")
         .select(["encounter", "is_unable_to_work"])
         .where("encounter", "in", encounterIds)
+        .execute();
+}
+
+/**
+ * Fetch provider information for a list of provider IDs
+ */
+export async function getProvidersByIds(providerIds: number[]) {
+    if (providerIds.length === 0) return [];
+
+    return await openemrDb
+        .selectFrom("users")
+        .select(["id", "username", "fname", "mname", "lname", "federaltaxid", "npi", "taxonomy"]) // Assuming federaltaxid or npi is the ID number
+        .where("id", "in", providerIds)
         .execute();
 }
 
