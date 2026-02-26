@@ -2,6 +2,7 @@ import { os } from "@orpc/server";
 import { z } from "zod";
 import { searchPatients, getEncountersForPatients, getPatientsRipsData, getFacilityById, getFacilities, getBillingOptionsByEncounterIds, getBillingRecords, getPrescriptions } from "./openemr/queries";
 import { getRipUserTypes, createRipsGenerationRecord, ensureRipsIncapacidadOptions, getRipIncapacidades } from "./rips-helper";
+import { validateRipsJson } from "./rips-validator";
 
 const searchPatientsProcedure = os
     .input(z.object({ term: z.string().min(1) }))
@@ -300,10 +301,13 @@ const generateProcedure = os
                 }
             };
 
+            const validationErrors = validateRipsJson(ripsJson);
+
             return {
                 json: ripsJson,
                 filename: `RIPS_${consecutivoFile}.json`,
-                consecutivo: consecutivoFile
+                consecutivo: consecutivoFile,
+                validationErrors
             };
         } catch (error) {
             console.error("[rips.generate] Failed to generate RIPS", {
