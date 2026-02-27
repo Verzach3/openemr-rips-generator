@@ -44,7 +44,7 @@ export const RipsPage = () => {
   const [endDate, setEndDate] = useState<string>("");
 
   // Result
-  const [generatedResult, setGeneratedResult] = useState<{ json: any; filename: string; consecutivo: number } | null>(null);
+  const [generatedResult, setGeneratedResult] = useState<{ json: any; filename: string; consecutivo: number; validationErrors?: any[] } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -333,31 +333,68 @@ export const RipsPage = () => {
 
           {/* Result Area */}
           {generatedResult && (
-            <div className="enterprise-panel border-l-4 border-l-green-500">
-              <h2 className="text-lg font-bold text-gray-900 mb-2 border-b border-gray-200 pb-2">
-                Generation Successful
-              </h2>
-              <div className="mb-4 text-sm text-gray-700">
-                <p>File: <strong>{generatedResult.filename}</strong></p>
-                <p>Consecutivo ID: <strong>{generatedResult.consecutivo}</strong></p>
+            <div className="space-y-4">
+              <div className="enterprise-panel border-l-4 border-l-green-500">
+                <h2 className="text-lg font-bold text-gray-900 mb-2 border-b border-gray-200 pb-2">
+                  Generation Successful
+                </h2>
+                <div className="mb-4 text-sm text-gray-700">
+                  <p>File: <strong>{generatedResult.filename}</strong></p>
+                  <p>Consecutivo ID: <strong>{generatedResult.consecutivo}</strong></p>
+                </div>
+                <div className="flex gap-2">
+                  <button className="btn-primary bg-green-600 hover:bg-green-700" onClick={downloadJson}>
+                    Download JSON
+                  </button>
+                  <button
+                    className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50"
+                    onClick={() => setGeneratedResult(null)}
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="mt-4">
+                  <label className="text-xs font-bold text-gray-500">Preview:</label>
+                  <pre className="mt-1 bg-gray-900 text-green-400 p-4 rounded text-xs overflow-x-auto max-h-60">
+                    {JSON.stringify(generatedResult.json, null, 2)}
+                  </pre>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button className="btn-primary bg-green-600 hover:bg-green-700" onClick={downloadJson}>
-                  Download JSON
-                </button>
-                <button
-                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50"
-                  onClick={() => setGeneratedResult(null)}
-                >
-                  Clear
-                </button>
-              </div>
-              <div className="mt-4">
-                <label className="text-xs font-bold text-gray-500">Preview:</label>
-                <pre className="mt-1 bg-gray-900 text-green-400 p-4 rounded text-xs overflow-x-auto max-h-60">
-                  {JSON.stringify(generatedResult.json, null, 2)}
-                </pre>
-              </div>
+
+              {/* Validation Errors */}
+              {generatedResult.validationErrors && generatedResult.validationErrors.length > 0 && (
+                <div className="enterprise-panel border-l-4 border-l-orange-500">
+                  <h2 className="text-lg font-bold text-orange-800 mb-2 border-b border-gray-200 pb-2">
+                    Validation Issues ({generatedResult.validationErrors.length})
+                  </h2>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-orange-50 text-orange-800">
+                          <th className="p-2 border-b border-orange-200">Scope</th>
+                          <th className="p-2 border-b border-orange-200">Field</th>
+                          <th className="p-2 border-b border-orange-200">Issue</th>
+                          <th className="p-2 border-b border-orange-200">Current Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {generatedResult.validationErrors.map((err, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50 border-b border-gray-100">
+                            <td className="p-2 font-semibold text-gray-700">{err.scope}</td>
+                            <td className="p-2 text-gray-600 font-mono">{err.field}</td>
+                            <td className={`p-2 font-medium ${err.severity === 'error' ? 'text-red-600' : 'text-orange-600'}`}>
+                              {err.message}
+                            </td>
+                            <td className="p-2 text-gray-500 font-mono truncate max-w-xs">
+                              {JSON.stringify(err.value)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -111,7 +111,7 @@ export async function searchPatients(term: string) {
 export async function getEncountersForPatients(patientIds: number[], startDate?: Date, endDate?: Date) {
     let query = openemrDb
         .selectFrom("form_encounter")
-        .select(["id", "date", "encounter", "pid", "invoice_refno", "reason"])
+        .select(["id", "date", "encounter", "pid", "invoice_refno", "reason", "provider_id"])
         .where("pid", "in", patientIds);
 
     if (startDate) {
@@ -162,6 +162,19 @@ export async function getBillingOptionsByEncounterIds(encounterIds: number[]) {
 }
 
 /**
+ * Fetch provider information for a list of provider IDs
+ */
+export async function getProvidersByIds(providerIds: number[]) {
+    if (providerIds.length === 0) return [];
+
+    return await openemrDb
+        .selectFrom("users")
+        .select(["id", "username", "fname", "mname", "lname", "federaltaxid", "npi", "taxonomy"]) // Assuming federaltaxid or npi is the ID number
+        .where("id", "in", providerIds)
+        .execute();
+}
+
+/**
  * Fetch billing records for multiple encounters.
  */
 export async function getBillingRecords(encounterIds: number[]) {
@@ -182,7 +195,7 @@ export async function getPrescriptions(encounterIds: number[]) {
 
     return await openemrDb
         .selectFrom("prescriptions")
-        .select(["encounter", "rxnorm_drugcode", "drug", "quantity", "unit", "start_date"])
+        .select(["encounter", "rxnorm_drugcode", "drug", "quantity", "unit", "start_date", "end_date", "provider_id"])
         .where("encounter", "in", encounterIds)
         .execute();
 }
